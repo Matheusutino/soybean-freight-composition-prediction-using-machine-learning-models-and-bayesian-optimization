@@ -19,12 +19,6 @@ def read_yaml(file_path: str) -> None:
     with open(file_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-def read_lines_csv(file_path: str):
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
-        
-    return lines
-
 def create_folder(folder_path: str) -> None:
     folder = Path(folder_path)
     folder.mkdir(parents=True, exist_ok=True)

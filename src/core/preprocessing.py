@@ -16,6 +16,13 @@ class Preprocessing:
         numeric_cols = X.select_dtypes(include='number').columns
 
         # Preencha os valores ausentes nas colunas numéricas com a média
+        columns_to_fill_by_origem = ['PRODUCAO_MUNI', 'VALOR_PROD_MUNI', 'REDIMENTO_MEDIO_MUNI', 'AREA_PLANTADA_MUNI', 'AREA_COLHIDA_MUNI']
+        columns_to_fill_by_estado_origem = ['CAPACIDADE_INDUSTRIA_ESTADO_ORIGEM', 'VOLUME_EXPORTACAO_UF_ORIGEM_MES']
+
+        X[columns_to_fill_by_origem] = X.groupby('ORIGEM')[columns_to_fill_by_origem].transform(lambda x: x.fillna(x.mean()))
+        X[columns_to_fill_by_estado_origem] = X.groupby('UF_ORIGEM')[columns_to_fill_by_estado_origem].transform(lambda x: x.fillna(x.mean()))
+        X['CAPACIDADE_INDUSTRIA_ESTADO_DESTINO'] = X.groupby('UF_DESTINO')['CAPACIDADE_INDUSTRIA_ESTADO_DESTINO'].transform(lambda x: x.fillna(x.mean()))
+
         X[numeric_cols] = X[numeric_cols].fillna(X[numeric_cols].mean())
 
         scaler = StandardScaler()

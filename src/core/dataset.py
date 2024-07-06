@@ -1,16 +1,8 @@
-from typing import List
 import pandas as pd
-from src.core.utils import read_lines_csv
 
 class Dataset:
     @staticmethod
     def load_dataset(dataset_path: str) -> pd.DataFrame:
-        # lines = read_lines_csv(self.dataset_path)
-
-        # columns = [col.replace("\"", "") for col in lines[0].strip().split(',')]
-        # data = [line.strip().replace("\"", "").split(',') for line in lines[1:]]
-        # df = pd.DataFrame(data, columns=columns)  
-
         df = pd.read_csv(dataset_path)
 
         columns = [
