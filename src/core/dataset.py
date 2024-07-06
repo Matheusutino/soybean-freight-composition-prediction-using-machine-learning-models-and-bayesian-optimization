@@ -3,7 +3,25 @@ import pandas as pd
 class Dataset:
     @staticmethod
     def load_dataset(dataset_path: str) -> pd.DataFrame:
-        df = pd.read_csv(dataset_path)
+        """
+        Load a dataset from a CSV file into a Pandas DataFrame.
+
+        Args:
+            dataset_path (str): The file path to the CSV dataset.
+
+        Returns:
+            pd.DataFrame: The loaded dataset as a Pandas DataFrame.
+
+        Raises:
+            FileNotFoundError: If the specified file does not exist.
+            pd.errors.EmptyDataError: If the CSV file is empty or cannot be parsed.
+        """
+        try:
+            df = pd.read_csv(dataset_path)
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"File not found: {dataset_path}")
+        except pd.errors.EmptyDataError as e:
+            raise pd.errors.EmptyDataError(f"Empty or unreadable CSV file: {dataset_path}")
 
         columns = [
             'ORIGEM', 'UF_ORIGEM', 'DESTINO', 'UF_DESTINO', 
