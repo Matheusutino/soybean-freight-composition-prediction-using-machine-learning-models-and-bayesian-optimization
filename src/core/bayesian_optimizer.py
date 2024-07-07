@@ -11,8 +11,8 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.svm import SVC, SVR
 from xgboost import XGBClassifier, XGBRegressor
 import lightgbm as lgb
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, mean_squared_error, mean_absolute_error, r2_score
 from src.core.utils import write_json, create_folder
+from src.core.metric import Metric
 
 class BayesianOptimizer:
     def __init__(self, 
@@ -51,10 +51,19 @@ class BayesianOptimizer:
             direction='maximize' if task_type == 'classification' else 'minimize',
             sampler=TPESampler(seed=self.seed)
         )
+
+        # Define cross-validation strategy based on task_type
+        if self.task_type == 'classification':
+            self.kf = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
+        else:
+            self.kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
+
         # Metric to optimize based on task_type
         self.metric_to_optimize = 'f1' if self.task_type == 'classification' else 'rmse'
+
         # List to store all metrics across trials
         self.all_metrics = []
+
 
 
     def objective(self, trial: optuna.trial) -> float:
@@ -68,34 +77,29 @@ class BayesianOptimizer:
             float: Mean value of the metric to optimize across all K folds.
         """
         # Get model and its parameters based on trial
-        model, params = self.get_model(trial)
-
-        # Define cross-validation strategy based on task_type
-        if self.task_type == 'classification':
-            kf = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
-        else:
-            kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
+        self.model, params = self.get_model(trial)
         
         # Dictionary to store scores for each fold
         fold_scores = {}
 
         # Perform cross-validation
-        for fold, (train_index, val_index) in enumerate(kf.split(self.X, self.y)):
+        for fold, (train_index, val_index) in enumerate(self.kf.split(self.X, self.y)):
             X_train, X_val = self.X.iloc[train_index], self.X.iloc[val_index]
             y_train, y_val = self.y[train_index], self.y[val_index]
 
             # Set model parameters and fit on training data
-            model.set_params(**params)
-            model.fit(X_train, y_train)
+            self.model.set_params(**params)
+            self.model.fit(X_train, y_train)
 
             # Predict on validation data
-            y_pred = model.predict(X_val)
+            y_pred = self.model.predict(X_val)
 
+            metric = Metric(y_val, y_pred)
             # Evaluate performance based on task_type
             if self.task_type == 'classification':
-                score = self.evaluate_classification(y_val, y_pred)
+                score = metric.evaluate_classification()
             else:
-                score = self.evaluate_regression(y_val, y_pred)
+                score = metric.evaluate_regression()
 
             # Store score for the fold
             fold_scores[f'fold_{fold}'] = score
@@ -192,80 +196,72 @@ class BayesianOptimizer:
 
         return model, params
 
-    def evaluate_classification(self, y_true: np.ndarray, y_pred: np.ndarray):
-        """
-        Evaluate classification performance using various metrics.
-
-        Args:
-            y_true (np.ndarray): True labels.
-            y_pred (np.ndarray): Predicted labels.
-
-        Returns:
-            dict: Dictionary containing accuracy, precision, recall, and F1 score.
-
-        Raises:
-            ValueError: If y_true and y_pred have different shapes.
-        """
-        try:
-            accuracy = accuracy_score(y_true, y_pred)
-            precision = precision_score(y_true, y_pred, average='weighted')
-            recall = recall_score(y_true, y_pred, average='weighted')
-            f1 = f1_score(y_true, y_pred, average='weighted')
-
-            return {'accuracy': accuracy, 'precision': precision, 'recall': recall, 'f1': f1}
-
-        except Exception as e:
-            raise ValueError(f"Error in evaluating classification performance: {str(e)}")
-
-    def evaluate_regression(self, y_true: np.ndarray, y_pred: np.ndarray):
-        """
-        Evaluate regression performance using various metrics.
-
-        Args:
-            y_true (np.ndarray): True values.
-            y_pred (np.ndarray): Predicted values.
-
-        Returns:
-            dict: Dictionary containing MSE, RMSE, MAE, and R2 score.
-
-        Raises:
-            ValueError: If y_true and y_pred have different shapes.
-        """
-        try:
-            mse = mean_squared_error(y_true, y_pred)
-            rmse = np.sqrt(mse)
-            mae = mean_absolute_error(y_true, y_pred)
-            r2 = r2_score(y_true, y_pred)
-
-            return {'mse': mse, 'rmse': rmse, 'mae': mae, 'r2': r2}
-
-        except Exception as e:
-            raise ValueError(f"Error in evaluating regression performance: {str(e)}")
-
-    def get_best_model_infos(self, df: pd.DataFrame, path: str):
+    def get_best_model_infos(self, df, path: str):
         """
         Extract and save information about the best model found during optimization.
 
         Args:
-            df (pd.DataFrame): DataFrame containing optimization results.
             path (str): Path to save the best model information.
 
         Raises:
             ValueError: If df is empty or does not contain necessary columns.
         """
         try:
-            ascending = False if self.task_type == 'classification' else True
-            df = df.sort_values(by=self.metric_to_optimize, ascending=ascending)
-            best_model_row = df.iloc[0] 
+            best_score = float('-inf') if self.task_type == 'classification' else float('inf')
+            best_y_val = None
+            best_y_pred = None
+
+            for fold, (train_index, val_index) in enumerate(self.kf.split(self.X, self.y)):
+                X_train, X_val = self.X.iloc[train_index], self.X.iloc[val_index]
+                y_train, y_val = self.y[train_index], self.y[val_index]
+
+                # Set model parameters and fit on training data
+                self.model.set_params(**self.study.best_params)
+                self.model.fit(X_train, y_train)
+
+                # Predict on validation data
+                y_pred = self.model.predict(X_val)
+
+                metric = Metric(y_val, y_pred)
+                # Evaluate performance based on task_type
+                if self.task_type == 'classification':
+                    score = metric.evaluate_classification()
+                else:
+                    score = metric.evaluate_regression()
+
+                if self.task_type == 'classification':
+                    if score[self.metric_to_optimize] > best_score:
+                        best_score = score[self.metric_to_optimize]
+                        best_y_val = y_val
+                        best_y_pred = y_pred
+                else:
+                    if score[self.metric_to_optimize] < best_score:
+                        best_score = score[self.metric_to_optimize]
+                        best_y_val = y_val
+                        best_y_pred = y_pred
+
+            metric = Metric(best_y_val, best_y_pred)
+            if self.task_type == 'classification':
+                metric.save_confusion_matrix(path)
+            
+            metric.plot_feature_importance_tree(model = self.model, 
+                                                model_name = self.model_name,
+                                                top_k_features = 20,
+                                                feature_names = self.X.columns,
+                                                path = path)
 
             dict_best_model = {
                 'model_name': self.model_name,
                 'task_type': self.task_type,
             }
 
+            ascending = False if self.task_type == 'classification' else True
+            df = df.sort_values(by=self.metric_to_optimize, ascending=ascending)
+            best_model_row = df.iloc[0] 
+
             for col in df.columns[2:]:
                 value = best_model_row[col]
-                if isinstance(value, (int, float, str, bool)):
+                if isinstance(value, (int, float, str, bool, dict)):
                     dict_best_model[col] = value
                 else:
                     dict_best_model[col] = value.item() if hasattr(value, 'item') else str(value)
@@ -274,9 +270,6 @@ class BayesianOptimizer:
         except Exception as e:
             raise ValueError(f"Error in extracting best model information: {str(e)}")
         
-
-
-
     def optimize(self, n_trials: int = 50):
         """
         Perform optimization using Optuna.
