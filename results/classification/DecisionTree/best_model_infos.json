@@ -1,0 +1,32 @@
+{
+    "model_name": "DecisionTree",
+    "task_type": "classification",
+    "datetime_start": "2024-07-08 22:55:30.772558",
+    "datetime_complete": "2024-07-08 22:55:31.123562",
+    "duration": "0 days 00:00:00.351004",
+    "params_criterion": "entropy",
+    "params_max_depth": 7,
+    "params_min_samples_leaf": 1,
+    "params_min_samples_split": 3,
+    "state": "COMPLETE",
+    "fold_0": {
+        "accuracy": 0.5833333333333334,
+        "precision": 0.5788289435984637,
+        "recall": 0.5833333333333334,
+        "f1": 0.5755294472506244
+    },
+    "fold_1": {
+        "accuracy": 0.576716586606386,
+        "precision": 0.5796103763620942,
+        "recall": 0.576716586606386,
+        "f1": 0.5690530385716068
+    },
+    "accuracy": 0.5800249599698597,
+    "precision": 0.579219659980279,
+    "recall": 0.5800249599698597,
+    "f1": 0.5722912429111155,
+    "accuracy_std": 0.0046787464800183585,
+    "precision_std": 0.0005525564062044842,
+    "recall_std": 0.0046787464800183585,
+    "f1_std": 0.004579512494668723
+}

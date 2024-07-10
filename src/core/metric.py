@@ -93,7 +93,7 @@ class Metric:
                                      model_name: str, 
                                      top_k_features: int, 
                                      feature_names: List[str], 
-                                     path: str):
+                                     path: str) -> None:
         """
         Plots and saves feature importances for tree-based models.
 
@@ -103,9 +103,6 @@ class Metric:
             top_k_features (int): Number of top features to plot.
             feature_names (List[str]): Names of features.
             path (str): Path to save the image.
-        
-        Raises:
-            TypeError: If the model_name is not supported.
         """
         path_to_save_image = f'{path}/{model_name}_feature_importance.png'
         if(model_name in ['DecisionTree', 'RandomForest', 'XGBoost']):
@@ -135,6 +132,7 @@ class Metric:
             plt.savefig(path + '/lgb_split_feature_importance.png', dpi=self.dpi, bbox_inches='tight')
             plt.close()
         else:
-            raise TypeError("Model type not supported for feature importance plotting.")
+            print("Model type not supported for feature importance plotting.")
         
         plt.close()
+

@@ -1,0 +1,32 @@
+{
+    "model_name": "MLP",
+    "task_type": "classification",
+    "datetime_start": "2024-07-09 21:48:01.535306",
+    "datetime_complete": "2024-07-09 21:48:09.164391",
+    "duration": "0 days 00:00:07.629085",
+    "params_dropout_rate": 0.4,
+    "params_learning_rate": 0.015751320499779727,
+    "params_num_layers": 2,
+    "params_num_units": 128,
+    "state": "COMPLETE",
+    "fold_0": {
+        "accuracy": 0.4387005649717514,
+        "precision": 0.4597105724736845,
+        "recall": 0.4387005649717514,
+        "f1": 0.40016499302657743
+    },
+    "fold_1": {
+        "accuracy": 0.5038146369030799,
+        "precision": 0.5127095623890568,
+        "recall": 0.5038146369030799,
+        "f1": 0.5042413071307392
+    },
+    "accuracy": 0.47125760093741564,
+    "precision": 0.4862100674313707,
+    "recall": 0.47125760093741564,
+    "f1": 0.4522031500786583,
+    "accuracy_std": 0.046042601813311025,
+    "precision_std": 0.03747594516519722,
+    "recall_std": 0.046042601813311025,
+    "f1_std": 0.07359306746395393
+}

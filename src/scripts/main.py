@@ -3,12 +3,29 @@ from src.core.dataset import Dataset
 from src.core.preprocessing import Preprocessing
 from src.core.bayesian_optimizer import BayesianOptimizer
 
-def main(task_type, model_name, n_trials):
-    df = Dataset().load_dataset(dataset_path='dataset/Banco_de_dados_ajustado_BASE.csv')
-    X, y = Preprocessing.clean_data(df, task_type=task_type)
+def main(task_type: str, model_name: str, n_trials: int, n_splits: int) -> None:
+    
+    """
+    Main function to perform Bayesian optimization.
 
-    optimizer = BayesianOptimizer(X, y, task_type=task_type, model_name=model_name)
-    optimizer.optimize(n_trials=n_trials)
+    Args:
+        task_type (str): Type of task, 'classification' or 'regression'.
+        model_name (str): Name of the machine learning model.
+        n_trials (int): Number of attempts for optimization.
+        n_splits (int): Number of splits for cross-validation.
+
+    Raises:
+        Exception: If any other error occurs during the optimization process.
+    """
+    try:
+        df = Dataset().load_dataset(dataset_path='dataset/Banco_de_dados_ajustado_BASE.csv')
+        X, y = Preprocessing.clean_data(df, task_type=task_type)
+        
+        optimizer = BayesianOptimizer(X, y, task_type=task_type, model_name=model_name, n_splits=n_splits)
+        optimizer.optimize(n_trials=n_trials)
+
+    except Exception as e:
+        raise Exception(f"An error occurred during optimization: {str(e)}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script for Bayesian optimization with parameters.')
@@ -18,7 +35,10 @@ if __name__ == '__main__':
                         help='Model name: name of machine learning model')
     parser.add_argument('--n_trials', type=int, default=50,
                         help='Number of attempts for optimization')
+    parser.add_argument('--n_splits', type=int, default=5,
+                        help='Number of splits for cross-validation')
 
     args = parser.parse_args()
 
-    main(args.task_type, args.model_name, args.n_trials)
+    main(args.task_type, args.model_name, args.n_trials, args.n_splits)
+
