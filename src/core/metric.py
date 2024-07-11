@@ -4,7 +4,8 @@ from typing import List
 from matplotlib import pyplot as plt
 import lightgbm as lgb
 from sklearn.metrics import confusion_matrix
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, median_absolute_error, r2_score
 
 class Metric:
     def __init__(self, y_true: np.ndarray, y_pred: np.ndarray, dpi: int = 600) -> None:
@@ -27,11 +28,16 @@ class Metric:
         """
         try:
             accuracy = accuracy_score(self.y_true, self.y_pred)
+            balanced_accuracy = balanced_accuracy_score(self.y_true, self.y_pred)
             precision = precision_score(self.y_true, self.y_pred, average = 'weighted')
             recall = recall_score(self.y_true, self.y_pred, average = 'weighted')
             f1 = f1_score(self.y_true, self.y_pred, average = 'weighted')
 
-            return {'accuracy': accuracy, 'precision': precision,'recall': recall, 'f1': f1}
+            return {'accuracy': accuracy, 
+                    'balanced_accuracy': balanced_accuracy, 
+                    'precision': precision,
+                    'recall': recall, 
+                    'f1': f1}
 
         except Exception as e:
             raise ValueError(f"Error in evaluating classification performance: {str(e)}")
@@ -50,9 +56,14 @@ class Metric:
             mse = mean_squared_error(self.y_true, self.y_pred)
             rmse = np.sqrt(mse)
             mae = mean_absolute_error(self.y_true, self.y_pred)
+            mdae = median_absolute_error(self.y_true, self.y_pred)
             r2 = r2_score(self.y_true, self.y_pred)
 
-            return {'mse': mse, 'rmse': rmse,'mae': mae, 'r2': r2}
+            return {'mse': mse, 
+                    'rmse': rmse,
+                    'mae': mae, 
+                    'mdae': mdae,
+                    'r2': r2}
 
         except Exception as e:
             raise ValueError(f"Error in evaluating regression performance: {str(e)}")

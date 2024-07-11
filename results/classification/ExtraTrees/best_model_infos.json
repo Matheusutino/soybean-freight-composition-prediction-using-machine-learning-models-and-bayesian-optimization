@@ -1,0 +1,59 @@
+{
+    "model_name": "ExtraTrees",
+    "task_type": "classification",
+    "datetime_start": "2024-07-10 20:55:23.366029",
+    "datetime_complete": "2024-07-10 20:55:33.904459",
+    "duration": "0 days 00:00:10.538430",
+    "params_criterion": "gini",
+    "params_max_depth": 10,
+    "params_max_features": 0.9751805067407778,
+    "params_min_samples_leaf": 8,
+    "params_min_samples_split": 13,
+    "params_n_estimators": 191,
+    "state": "COMPLETE",
+    "fold_0": {
+        "accuracy": 0.6207627118644068,
+        "balanced_accuracy": 0.6358335907471283,
+        "precision": 0.6218256819931346,
+        "recall": 0.6207627118644068,
+        "f1": 0.6167616066993185
+    },
+    "fold_1": {
+        "accuracy": 0.6087570621468926,
+        "balanced_accuracy": 0.6220742879553666,
+        "precision": 0.6048681787933061,
+        "recall": 0.6087570621468926,
+        "f1": 0.6015413747599171
+    },
+    "fold_2": {
+        "accuracy": 0.6059322033898306,
+        "balanced_accuracy": 0.6233162731580529,
+        "precision": 0.606495212493475,
+        "recall": 0.6059322033898306,
+        "f1": 0.599109866263711
+    },
+    "fold_3": {
+        "accuracy": 0.6242937853107344,
+        "balanced_accuracy": 0.6427791589806107,
+        "precision": 0.6296529042747218,
+        "recall": 0.6242937853107344,
+        "f1": 0.6163671774786376
+    },
+    "fold_4": {
+        "accuracy": 0.6035335689045936,
+        "balanced_accuracy": 0.6135957035181356,
+        "precision": 0.6017086649365598,
+        "recall": 0.6035335689045936,
+        "f1": 0.5986341895864191
+    },
+    "accuracy": 0.6126558663232916,
+    "balanced_accuracy": 0.6275198028718588,
+    "precision": 0.6129101284982396,
+    "recall": 0.6126558663232916,
+    "f1": 0.6064828429576006,
+    "accuracy_std": 0.009284216854825033,
+    "balanced_accuracy_std": 0.011653013078830977,
+    "precision_std": 0.01215632061059591,
+    "recall_std": 0.009284216854825033,
+    "f1_std": 0.00927002300428823
+}

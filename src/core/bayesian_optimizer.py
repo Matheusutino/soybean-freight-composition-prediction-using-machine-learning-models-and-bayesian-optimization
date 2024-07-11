@@ -1,5 +1,6 @@
 import os
 import optuna
+import statistics
 import numpy as np
 import pandas as pd
 from typing import Literal
@@ -8,7 +9,6 @@ from sklearn.model_selection import KFold, StratifiedKFold
 from src.core.utils import write_json, create_folder
 from src.core.metric import Metric
 from src.core.encoder import Encoder
-from src.core.evaluation_folds import compute_folds_metrics
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 from src.core.models import Model
@@ -76,6 +76,10 @@ class BayesianOptimizer:
         # Metric to optimize based on task_type
         self.metric_to_optimize = 'f1' if self.task_type == 'classification' else 'rmse'
 
+        self.best_y_val_fol = None
+        self.best_y_pred_fol = None
+        self.best_score = float('-inf') if self.task_type == 'classification' else float('inf')
+
         # List to store all metrics across trials
         self.all_metrics = []
         
@@ -83,7 +87,7 @@ class BayesianOptimizer:
     def train_and_predict(self, X_train, y_train, X_val):
         """Treina o modelo e faz previsões nos dados de validação."""
         if self.model_name == 'MLP':
-            self.model.fit(X_train, y_train, validation_split=0.2, epochs=10, callbacks=[self.early_stopping])
+            self.model.fit(X_train, y_train, validation_split=0.2, epochs=100, callbacks=[self.early_stopping])
         else:
             self.model.fit(X_train, y_train)
         y_pred = self.model.predict(X_val)
@@ -96,6 +100,20 @@ class BayesianOptimizer:
             return metric.evaluate_classification()
         else:
             return metric.evaluate_regression()
+    
+    def compute_folds_metrics(self, fold_scores: dict) -> dict:
+        # Calculate mean metrics across folds
+        mean_metrics = {}
+        std_metrics = {}
+
+        for metric in fold_scores['fold_0'].keys():
+            metric_values = [d[metric] for d in fold_scores.values()]
+            mean_metrics[metric] = sum(metric_values) / len(metric_values)
+            std_metrics[f'{metric}_std'] = statistics.stdev(metric_values)
+
+        combined_dict = {**fold_scores, **mean_metrics, **std_metrics}
+
+        return combined_dict
 
     def objective(self, trial: optuna.trial) -> float:
         """
@@ -117,7 +135,10 @@ class BayesianOptimizer:
         
         # Dictionary to store scores for each fold
         fold_scores = {}
-
+        
+        best_score_fold = float('-inf') if self.task_type == 'classification' else float('inf')
+        best_y_val_fold = None
+        best_y_pred_fold = None
         # Perform cross-validation
         for fold, (train_index, val_index) in enumerate(self.kf.split(self.X, self.y)):
             X_train, X_val = self.X.iloc[train_index], self.X.iloc[val_index]
@@ -128,15 +149,32 @@ class BayesianOptimizer:
 
             if(self.model_name == 'MLP'):
                 y_pred = self.encoder.transform_inverse(y_pred)
+            
+            if(self.model_name == 'XGBoost'):
+                y_val = self.encoder.transform(y_val)
 
             score = self.evaluate_performance(y_val, y_pred)
             fold_scores[f'fold_{fold}'] = score
 
-        combined_metrics = compute_folds_metrics(fold_scores)
+            current_fold_score = score[self.metric_to_optimize]
+            if (self.task_type == 'classification' and current_fold_score > best_score_fold) or \
+               (self.task_type == 'regression' and current_fold_score < best_score_fold):
+                best_score_fold = current_fold_score
+                best_y_val_fold = y_val
+                best_y_pred_fold = y_pred
+
+        combined_metrics = self.compute_folds_metrics(fold_scores)
         self.all_metrics.append(combined_metrics)
 
+        current_score = combined_metrics[self.metric_to_optimize]
+        if (self.task_type == 'classification' and current_score > self.best_score) or \
+               (self.task_type == 'regression' and current_score < self.best_score):
+            self.best_score = current_score
+            self.best_y_val_fold = best_y_val_fold
+            self.best_y_pred_fold = best_y_pred_fold
+
         # Return mean value of the metric to optimize
-        return combined_metrics[self.metric_to_optimize]
+        return current_score
 
 
     def get_best_model_infos(self, df, path: str) -> None:
@@ -149,55 +187,8 @@ class BayesianOptimizer:
         Raises:
             ValueError: If df is empty or does not contain necessary columns.
         """
-        scores = []
         try:
-            best_score = float('-inf') if self.task_type == 'classification' else float('inf')
-            best_y_val = None
-            best_y_pred = None
-
-            for fold, (train_index, val_index) in enumerate(self.kf.split(self.X, self.y)):
-                X_train, X_val = self.X.iloc[train_index], self.X.iloc[val_index]
-                y_train, y_val = self.y[train_index], self.y[val_index]
-
-                y_train = self.encoder.transform(y_train)
-
-                # Set model parameters and fit on training data
-                if(self.model_name != 'MLP'):
-                    self.model.set_params(**self.study.best_params)
-                else:
-                    mlp_params = self.study.best_params.copy()
-                    # Reconstruir o modelo MLP com os melhores parâmetros
-                    self.model = Model().get_model(self.model_name, self.task_type, trial=None, 
-                                                    seed=self.seed, n_features=self.X.shape[1], 
-                                                    num_classes=self.num_classes, 
-                                                    params=mlp_params)
-
-                y_pred = self.train_and_predict(X_train, y_train, X_val)
-
-                if(self.model_name == 'MLP'):
-                    y_pred = self.encoder.transform_inverse(y_pred)
-
-                score = self.evaluate_performance(y_val, y_pred)
-
-                if self.task_type == 'classification':
-                    if score[self.metric_to_optimize] > best_score:
-                        best_score = score[self.metric_to_optimize]
-                        best_y_val = y_val
-                        best_y_pred = y_pred
-                else:
-                    if score[self.metric_to_optimize] < best_score:
-                        best_score = score[self.metric_to_optimize]
-                        best_y_val = y_val
-                        best_y_pred = y_pred
-
-                scores.append(score[self.metric_to_optimize])
-            print(sum(scores)/len(scores))
-            if self.task_type == 'classification':
-                if(self.model_name == 'XGBoost'):
-                    best_y_val = self.encoder.transform_inverse(best_y_val)
-                    best_y_pred = self.encoder.transform_inverse(best_y_pred)
-
-            metric = Metric(best_y_val, best_y_pred)
+            metric = Metric(self.best_y_val_fold, self.best_y_pred_fold)
             if self.task_type == 'classification':
                 metric.save_confusion_matrix(path)
             
