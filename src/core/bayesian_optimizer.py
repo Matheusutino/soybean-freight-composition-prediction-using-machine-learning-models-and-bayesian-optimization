@@ -233,44 +233,30 @@ class BayesianOptimizer:
         try:
             if(self.model_name != 'MLP'):
                 self.model.set_params(**self.study.best_params)
-            else:
-                mlp_params = self.study.best_params.copy()
-                print("Melhores parâmetros:", mlp_params)
-                # Reconstruir o modelo MLP com os melhores parâmetros
-                self.model = Model().get_model(self.model_name, 
-                                               self.task_type, 
-                                               trial=None, 
-                                               seed=self.seed, 
-                                               n_features=self.X.shape[1], 
-                                               num_classes=self.num_classes, 
-                                               params=mlp_params)
-                    
-            y_pred = self.train_and_predict(self.best_X_train_fold, self.best_y_train_fold, self.best_X_val_fold)
+                        
+                y_pred = self.train_and_predict(self.best_X_train_fold, self.best_y_train_fold, self.best_X_val_fold)
 
-            if(self.model_name == 'MLP'):
-                y_pred = self.encoder.transform_inverse(y_pred)
-
-            metric = Metric(self.best_y_val_fold, y_pred, task_type = self.task_type, seed = self.seed)
-
-            metric.plot_feature_importance(model = self.model, 
-                                            model_name = self.model_name,
-                                            X_val = self.best_X_val_fold,
-                                            y_val = self.best_y_val_fold,
-                                            top_k_features = 10,
-                                            feature_names = self.X.columns,
-                                            path = path,
-                                            n_repeats = self.n_repeats,
-                                            encoder = self.encoder)
-        
-            if(self.model_name == 'XGBoost'):
-                y_pred = self.encoder.transform_inverse(y_pred)
-                self.best_y_val_fold = self.encoder.transform_inverse(self.best_y_val_fold)
                 metric = Metric(self.best_y_val_fold, y_pred, task_type = self.task_type, seed = self.seed)
 
-            if self.task_type == 'classification':
-                metric.save_confusion_matrix(path)
-                
-            self.save_best_results_json(df, path)
+                metric.plot_feature_importance(model = self.model, 
+                                                model_name = self.model_name,
+                                                X_val = self.best_X_val_fold,
+                                                y_val = self.best_y_val_fold,
+                                                top_k_features = 10,
+                                                feature_names = self.X.columns,
+                                                path = path,
+                                                n_repeats = self.n_repeats,
+                                                encoder = self.encoder)
+            
+                if(self.model_name == 'XGBoost'):
+                    y_pred = self.encoder.transform_inverse(y_pred)
+                    self.best_y_val_fold = self.encoder.transform_inverse(self.best_y_val_fold)
+                    metric = Metric(self.best_y_val_fold, y_pred, task_type = self.task_type, seed = self.seed)
+
+                if self.task_type == 'classification':
+                    metric.save_confusion_matrix(path)
+                    
+                self.save_best_results_json(df, path)
         except Exception as e:
             raise ValueError(f"Error in extracting best model information: {str(e)}")
         
