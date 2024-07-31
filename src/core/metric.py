@@ -240,6 +240,7 @@ class Metric:
                                 y_val,
                                 top_k_features: int, 
                                 feature_names: List[str], 
+                                n_repeats: int,
                                 path: str,
                                 encoder = None) -> None:
         
@@ -256,6 +257,7 @@ class Metric:
                                                 top_k_features = top_k_features, 
                                                 feature_names = feature_names, 
                                                 path = path,
+                                                n_repeats = n_repeats,
                                                 encoder = encoder) 
 
 
