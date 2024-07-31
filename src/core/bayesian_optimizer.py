@@ -244,8 +244,8 @@ class BayesianOptimizer:
                                                 y_val = self.best_y_val_fold,
                                                 top_k_features = 10,
                                                 feature_names = self.X.columns,
-                                                path = path,
                                                 n_repeats = self.n_repeats,
+                                                path = path,
                                                 encoder = self.encoder)
             
                 if(self.model_name == 'XGBoost'):
@@ -256,7 +256,7 @@ class BayesianOptimizer:
                 if self.task_type == 'classification':
                     metric.save_confusion_matrix(path)
                     
-                self.save_best_results_json(df, path)
+            self.save_best_results_json(df, path)
         except Exception as e:
             raise ValueError(f"Error in extracting best model information: {str(e)}")
         

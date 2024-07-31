@@ -212,26 +212,27 @@ class Metric:
                                                             title = f'Top {top_k_features} Feature Importance using permutation importance', 
                                                             save_path = f'{path}/feature_importance_permutation.png')
         
-        classes = np.unique(y_val)
-        for cls in classes:
-            mask = (y_val == cls)
-            result = permutation_importance(estimator=model, 
-                                            X=X_val[mask], 
-                                            y=y_val[mask],
-                                            n_repeats=n_repeats,
-                                            random_state=self.seed,
-                                            n_jobs=-1)
-            importances = result.importances_mean
+        if(self.task_type == 'classification'):
+            classes = np.unique(y_val)
+            for cls in classes:
+                mask = (y_val == cls)
+                result = permutation_importance(estimator=model, 
+                                                X=X_val[mask], 
+                                                y=y_val[mask],
+                                                n_repeats=n_repeats,
+                                                random_state=self.seed,
+                                                n_jobs=-1)
+                importances = result.importances_mean
 
-            if(model_name == 'XGBoost'):
-                int_to_label = {idx: label for idx, label in enumerate(encoder.get_classes())}
-                cls = int_to_label[cls]
+                if(model_name == 'XGBoost'):
+                    int_to_label = {idx: label for idx, label in enumerate(encoder.get_classes())}
+                    cls = int_to_label[cls]
 
-            self._plot_feature_permutation_importance_and_save(importances,
-                                                            feature_names, 
-                                                            top_k_features, 
-                                                            title = f'Top {top_k_features} Feature Importance using permutation importance for class {cls}', 
-                                                            save_path = f'{path}/feature_importance_permutation_for_class_{cls}.png')
+                self._plot_feature_permutation_importance_and_save(importances,
+                                                                feature_names, 
+                                                                top_k_features, 
+                                                                title = f'Top {top_k_features} Feature Importance using permutation importance for class {cls}', 
+                                                                save_path = f'{path}/feature_importance_permutation_for_class_{cls}.png')
                 
     def plot_feature_importance(self, 
                                 model, 
@@ -240,6 +241,7 @@ class Metric:
                                 y_val,
                                 top_k_features: int, 
                                 feature_names: List[str], 
+                                n_repeats: int,
                                 path: str,
                                 encoder = None) -> None:
         
@@ -256,6 +258,7 @@ class Metric:
                                                 top_k_features = top_k_features, 
                                                 feature_names = feature_names, 
                                                 path = path,
+                                                n_repeats = n_repeats,
                                                 encoder = encoder) 
 
 
