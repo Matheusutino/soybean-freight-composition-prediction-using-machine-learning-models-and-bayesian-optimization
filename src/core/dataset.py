@@ -32,8 +32,7 @@ class Dataset:
                 'MERCADO_NACIONAL', 'MERCADO_INTERNACIONAL_CHICAGO', 'MERCADO_INTERNACIONAL_PARIDADE', 
                 'CAPACIDADE_INDUSTRIA_ESTADO_ORIGEM', 'CAPACIDADE_INDUSTRIA_ESTADO_DESTINO', 
                 'CAMBIO_MEDIO_MENSAL', 'IMPORTACAO_OLEO_DIESEL', 'VOLUME_EXPORTACAO_UF_ORIGEM_MES', 
-                'VOLUME_EXPORTACAO_UF_ORIGEM_ANO', 'PRECOAJUSTADO', 'preco_frete (y)', 
-                'PERIODO_SAFRA'
+                'VOLUME_EXPORTACAO_UF_ORIGEM_ANO', 'PRECOAJUSTADO', 'PERIODO_SAFRA'
             ]
             df = df[columns]
         except FileNotFoundError as e:

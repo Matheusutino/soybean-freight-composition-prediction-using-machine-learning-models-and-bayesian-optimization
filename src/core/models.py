@@ -1,6 +1,5 @@
-import os
 import optuna
-from typing import Union
+from typing import Optional, Dict
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
@@ -13,12 +12,13 @@ import tensorflow as tf
 
 class Model:
     @staticmethod
-    def get_model(model_name:str, 
-                  task_type:str, 
+    def get_model(model_name: str, 
+                  task_type: str, 
                   trial: optuna.trial, 
                   seed: int = 42, 
-                  n_features: Union[None, int] = None, 
-                  num_classes: Union[None, int] = None):
+                  n_features: Optional[int] = None, 
+                  num_classes: Optional[int] = None,
+                  params: Optional[Dict[str, int]] = None):
 
         if model_name == 'KNN':
             params = {
@@ -29,14 +29,14 @@ class Model:
             model = KNeighborsClassifier(**params, n_jobs = -1) if task_type == 'classification' else KNeighborsRegressor(**params, n_jobs = -1)
         elif model_name == 'LogisticRegression':
             params = {
-                'C': trial.suggest_float('C', 1e-10, 1e10, log = True),
+                'C': trial.suggest_float('C', 1e-5, 1e5, log = True),
                 'penalty': trial.suggest_categorical('penalty', ['l1', 'l2', 'elasticnet', None]),
             }
             model = LogisticRegression(**params, max_iter = 300, solver = 'saga', random_state=seed, n_jobs = -1)
         elif model_name == 'SVM':
             params = {
-                'C': trial.suggest_float('C', 1e-10, 1e10, log = True),
-                'gamma': trial.suggest_float('gamma', 1e-10, 1e1, log = True),
+                'C': trial.suggest_float('C', 1e-5, 1e5, log = True),
+                'gamma': trial.suggest_float('gamma', 1e-5, 1e5, log = True),
                 'kernel': trial.suggest_categorical('kernel', ['linear', 'poly', 'rbf', 'sigmoid'])
             }
             model = SVC(**params, random_state=seed) if task_type == 'classification' else SVR(**params)
@@ -94,11 +94,18 @@ class Model:
             }
             model = ExtraTreesClassifier(**params, random_state=seed, n_jobs = -1) if task_type == 'classification' else ExtraTreesRegressor(**params, random_state=seed, n_jobs = -1)
         elif model_name == 'MLP':
-            # Definindo os hiperparâmetros da MLP
-            num_layers = trial.suggest_int('num_layers', 1, 4)
-            num_units = trial.suggest_int('num_units', 16, 128, step = 16)
-            dropout_rate = trial.suggest_float('dropout_rate', 0.05, 0.5, step = 0.05)
-            learning_rate = trial.suggest_float('learning_rate', 1e-3, 1e-1, log = True)
+            if params is not None:
+                # Use os parâmetros fornecidos
+                num_layers = params['num_layers']
+                num_units = params['num_units']
+                dropout_rate = params['dropout_rate']
+                learning_rate = params['learning_rate']
+            else:
+                # Definindo os hiperparâmetros da MLP
+                num_layers = trial.suggest_int('num_layers', 1, 3)
+                num_units = trial.suggest_int('num_units', 16, 128, step = 16)
+                dropout_rate = trial.suggest_float('dropout_rate', 0.0, 0.5, step = 0.05)
+                learning_rate = trial.suggest_float('learning_rate', 1e-3, 1e-1, log = True)
 
             model = tf.keras.Sequential()
             model.add(tf.keras.layers.Input(shape=(n_features,)))

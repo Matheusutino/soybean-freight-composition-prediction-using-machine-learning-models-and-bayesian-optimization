@@ -38,4 +38,7 @@ class Encoder:
                 y_decoded = self.enc.inverse_transform(y_to_decoder).flatten()
 
         return y_decoded
+    
+    def get_classes(self):
+        return self.enc.classes_
          
