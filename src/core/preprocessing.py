@@ -6,6 +6,15 @@ from sklearn.preprocessing import StandardScaler
 
 class Preprocessing:
     @staticmethod
+    def generate_classification_target(value: int) -> str:
+        if(value < 60):
+            return 'frete_baixo'
+        elif(value < 100):
+            return 'frete_medio'
+        else:
+            return 'frete_alto'
+
+    @staticmethod
     def clean_data(df: pd.DataFrame, 
                    task_type: Literal['classification', 'regression']) -> Tuple[pd.DataFrame, np.ndarray]:
         """
@@ -23,8 +32,8 @@ class Preprocessing:
             ValueError: If task_type is neither 'classification' nor 'regression'.
         """
         try:
-            # Drop rows with missing values in the target variable column
-            df = df.dropna(subset = ['preco_frete (y)'])
+            # Generate classes
+            df['preco_frete (y)'] = df['PRECOAJUSTADO'].apply(Preprocessing.generate_classification_target)
 
             # Drop targets variables
             X = df.drop(['preco_frete (y)', 'PRECOAJUSTADO'], axis = 1)

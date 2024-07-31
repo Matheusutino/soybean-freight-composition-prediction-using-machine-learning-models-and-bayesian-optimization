@@ -1,18 +1,19 @@
+import os
 import optuna
+import statistics
 import numpy as np
 import pandas as pd
-import statistics
 from typing import Literal
 from optuna.samplers import TPESampler
 from sklearn.model_selection import KFold, StratifiedKFold
-from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.svm import SVC, SVR
-from xgboost import XGBClassifier, XGBRegressor
-import lightgbm as lgb
 from src.core.utils import write_json, create_folder
 from src.core.metric import Metric
+from src.core.encoder import Encoder
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+import tensorflow as tf
+from src.core.models import Model
+
+
 
 class BayesianOptimizer:
     def __init__(self, 
@@ -21,6 +22,7 @@ class BayesianOptimizer:
                  task_type: Literal['classification', 'regression'], 
                  model_name: str,
                  n_splits: int = 5,
+                 n_repeats: int = 5,
                  seed: int = 42) -> None:
         """
         Initialize the BayesianOptimizer object.
@@ -31,6 +33,7 @@ class BayesianOptimizer:
             task_type (Literal['classification', 'regression']): Type of machine learning task.
             model_name (str): Name of the model to optimize.
             n_splits (int, optional): Number of folds for cross-validation. Defaults to 5.
+            n_repeats (int, optional): Number of repeats for permutation importance. Defaults to 5.
             seed (int, optional): Random seed for reproducibility. Defaults to 42.
 
         Raises:
@@ -44,27 +47,91 @@ class BayesianOptimizer:
         self.task_type = task_type
         self.model_name = model_name
         self.n_splits = n_splits
+        self.n_repeats = n_repeats
         self.seed = seed
 
-        # Create an Optuna study object based on task_type
-        self.study = optuna.create_study(
-            direction='maximize' if task_type == 'classification' else 'minimize',
-            sampler=TPESampler(seed=self.seed)
-        )
-
-        # Define cross-validation strategy based on task_type
-        if self.task_type == 'classification':
-            self.kf = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
-        else:
-            self.kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
-
-        # Metric to optimize based on task_type
-        self.metric_to_optimize = 'f1' if self.task_type == 'classification' else 'rmse'
+        self.best_X_train_fold = None
+        self.best_X_val_fold = None
+        self.best_y_train_fold = None
+        self.best_y_val_fold = None
+        self.best_y_pred_fold = None
+        self.best_score = float('-inf') if self.task_type == 'classification' else float('inf')
 
         # List to store all metrics across trials
         self.all_metrics = []
 
+        self._initialize()
+        
+    def _initialize_encoder(self) -> None:
+        """Initialize the encoder."""
+        self.encoder = Encoder(self.model_name, self.task_type)
+        self.encoder.fit(self.y)
 
+    def _initialize_cross_validator(self) -> None:
+        """Initialize the cross-validator based on the task type."""
+        if self.task_type == 'classification':
+            self.num_classes = len(np.unique(self.y))
+            self.kf = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
+        else:
+            self.num_classes = 1
+            self.kf = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
+
+    def _initialize_tf(self) -> None:
+        """Initialize TensorFlow settings."""
+        tf.random.set_seed(self.seed)
+        tf.keras.utils.set_random_seed(self.seed)
+        tf.config.experimental.enable_op_determinism()
+
+        self.early_stopping = tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss',  # Monitor validation loss
+            patience=15,         # Stop if val_loss doesn't improve for 15 epochs
+            restore_best_weights=True  # Restore model weights from the epoch with the best val_loss
+        )
+
+    def _initialize_optuna(self) -> None:
+        """Initialize the Optuna study."""
+        self.study = optuna.create_study(
+            direction='maximize' if self.task_type == 'classification' else 'minimize',
+            sampler=TPESampler(seed=self.seed)
+        )
+        self.metric_to_optimize = 'f1' if self.task_type == 'classification' else 'rmse'
+
+    def _initialize(self) -> None:
+        self._initialize_encoder()
+        self._initialize_cross_validator()
+        self._initialize_tf()
+        self._initialize_optuna()
+
+    def train_and_predict(self, X_train, y_train, X_val):
+        """Treina o modelo e faz previsões nos dados de validação."""
+        if self.model_name == 'MLP':
+            self.model.fit(X_train, y_train, validation_split=0.2, epochs=5, callbacks=[self.early_stopping])
+        else:
+            self.model.fit(X_train, y_train)
+        y_pred = self.model.predict(X_val)
+        return y_pred
+    
+    def evaluate_performance(self, y_val, y_pred):
+        """Avalia o desempenho do modelo com base no tipo de tarefa."""
+        metric = Metric(y_val, y_pred, task_type = self.task_type, seed = self.seed)
+        if self.task_type == 'classification':
+            return metric.evaluate_classification()
+        else:
+            return metric.evaluate_regression()
+    
+    def compute_folds_metrics(self, fold_scores: dict) -> dict:
+        # Calculate mean metrics across folds
+        mean_metrics = {}
+        std_metrics = {}
+
+        for metric in fold_scores['fold_0'].keys():
+            metric_values = [d[metric] for d in fold_scores.values()]
+            mean_metrics[metric] = sum(metric_values) / len(metric_values)
+            std_metrics[f'{metric}_std'] = statistics.stdev(metric_values)
+
+        combined_dict = {**fold_scores, **mean_metrics, **std_metrics}
+
+        return combined_dict
 
     def objective(self, trial: optuna.trial) -> float:
         """
@@ -77,126 +144,83 @@ class BayesianOptimizer:
             float: Mean value of the metric to optimize across all K folds.
         """
         # Get model and its parameters based on trial
-        self.model, params = self.get_model(trial)
+        self.model = Model().get_model(self.model_name,
+                                       self.task_type,
+                                       trial,
+                                       self.seed,
+                                       self.X.shape[1],
+                                       self.num_classes)
         
         # Dictionary to store scores for each fold
         fold_scores = {}
+        
+        best_score_fold = float('-inf') if self.task_type == 'classification' else float('inf')
 
         # Perform cross-validation
         for fold, (train_index, val_index) in enumerate(self.kf.split(self.X, self.y)):
             X_train, X_val = self.X.iloc[train_index], self.X.iloc[val_index]
             y_train, y_val = self.y[train_index], self.y[val_index]
 
-            # Set model parameters and fit on training data
-            self.model.set_params(**params)
-            self.model.fit(X_train, y_train)
+            y_train = self.encoder.transform(y_train)
+            y_pred = self.train_and_predict(X_train, y_train, X_val)
 
-            # Predict on validation data
-            y_pred = self.model.predict(X_val)
+            if(self.model_name == 'MLP'):
+                y_pred = self.encoder.transform_inverse(y_pred)
+            
+            if(self.model_name == 'XGBoost'):
+                y_val = self.encoder.transform(y_val)
 
-            metric = Metric(y_val, y_pred)
-            # Evaluate performance based on task_type
-            if self.task_type == 'classification':
-                score = metric.evaluate_classification()
-            else:
-                score = metric.evaluate_regression()
-
-            # Store score for the fold
+            score = self.evaluate_performance(y_val, y_pred)
             fold_scores[f'fold_{fold}'] = score
 
-        # Calculate mean metrics across folds
-        mean_metrics = {}
-        std_metrics = {}
+            current_fold_score = score[self.metric_to_optimize]
+            if (self.task_type == 'classification' and current_fold_score > best_score_fold) or \
+               (self.task_type == 'regression' and current_fold_score < best_score_fold):
+                best_score_fold = current_fold_score
+                best_X_train_fold = X_train
+                best_X_val_fold = X_val
+                best_y_train_fold = y_train
+                best_y_val_fold = y_val
+                best_y_pred_fold = y_pred
+                
+        # Save all folds
+        combined_metrics = self.compute_folds_metrics(fold_scores)
+        self.all_metrics.append(combined_metrics)
 
-        for metric in fold_scores['fold_0'].keys():
-            metric_values = [d[metric] for d in fold_scores.values()]
-            mean_metrics[metric] = sum(metric_values) / len(metric_values)
-            std_metrics[f'{metric}_std'] = statistics.stdev(metric_values)
-
-        combined_dict = {**fold_scores, **mean_metrics, **std_metrics}
-
-        self.all_metrics.append(combined_dict)
+        # Save the best fold
+        current_score = combined_metrics[self.metric_to_optimize]
+        if (self.task_type == 'classification' and current_score > self.best_score) or \
+               (self.task_type == 'regression' and current_score < self.best_score):
+            self.best_score = current_score
+            self.best_X_train_fold = best_X_train_fold
+            self.best_X_val_fold = best_X_val_fold
+            self.best_y_train_fold = best_y_train_fold
+            self.best_y_val_fold = best_y_val_fold
+            self.best_y_pred_fold = best_y_pred_fold
 
         # Return mean value of the metric to optimize
-        return mean_metrics[self.metric_to_optimize]
+        return current_score
 
-    def get_model(self, trial: optuna.trial):
-        """
-        Get the model and its hyperparameters based on the trial.
-
-        Args:
-            trial (optuna.trial): Trial object for hyperparameter optimization.
-
-        Returns:
-            tuple: Model object and its corresponding parameters.
-
-        Raises:
-            ValueError: If an invalid model_name is provided.
-        """
-        # Define model and its hyperparameters based on model_name and trial suggestions
-        if self.model_name == 'KNN':
-            params = {
-                'n_neighbors': trial.suggest_int('n_neighbors', 3, 500),
-                'weights': trial.suggest_categorical('weights', ['uniform', 'distance']),
-                'metric': trial.suggest_categorical('metric', ['cityblock', 'cosine', 'euclidean']),
+    def save_best_results_json(self, df: pd.DataFrame, path: str):
+        dict_best_model = {
+                'model_name': self.model_name,
+                'task_type': self.task_type,
             }
-            model = KNeighborsClassifier(n_jobs = -1) if self.task_type == 'classification' else KNeighborsRegressor(n_jobs = -1)
-        elif self.model_name == 'SVM':
-            params = {
-                'C': trial.suggest_float('C', 1e-10, 1e10, log = True),
-                'gamma': trial.suggest_float('gamma', 1e-10, 1e1, log = True),
-                'kernel': trial.suggest_categorical('kernel', ['linear', 'poly', 'rbf', 'sigmoid'])
-            }
-            model = SVC(random_state=self.seed) if self.task_type == 'classification' else SVR(random_state=self.seed)
-        elif self.model_name == 'DecisionTree':
-            params = {
-                'criterion': trial.suggest_categorical('criterion', ['gini', 'entropy', 'log_loss']),
-                'max_depth': trial.suggest_int('max_depth', 2, 10),
-                'min_samples_split': trial.suggest_int('min_samples_split', 2, 10),
-                'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 4),
-            }
-            model = DecisionTreeClassifier(random_state=self.seed) if self.task_type == 'classification' else DecisionTreeRegressor(random_state=self.seed)
-        elif self.model_name == 'RandomForest':
-            params = {
-                'n_estimators': trial.suggest_int('n_estimators', 50, 500),
-                'criterion': trial.suggest_categorical('criterion', ['gini', 'entropy', 'log_loss']),
-                'max_depth': trial.suggest_int('max_depth', 2, 10),
-                'min_samples_split': trial.suggest_int('min_samples_split', 2, 10),
-                'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 4),
-            }
-            model = RandomForestClassifier(random_state = self.seed, n_jobs = -1) if self.task_type == 'classification' else RandomForestRegressor(random_state = self.seed, n_jobs = -1)
 
-        elif self.model_name == 'XGBoost':
-            params = {
-                'n_estimators': trial.suggest_int('n_estimators', 50, 500),
-                'max_depth': trial.suggest_int('max_depth', 2, 10),
-                'max_leaves': trial.suggest_int('max_leaves', 0, 5),
-                'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3),
-                'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1),
-                'lambda': trial.suggest_float('lambda', 0.0, 10.0),
-                'alpha': trial.suggest_float('alpha', 0.0, 10.0),
-                'gamma': trial.suggest_float('gamma', 0.0, 10.0),
-            }
-            model = XGBClassifier(use_label_encoder=False, eval_metric='rmse', seed = self.seed) if self.task_type == 'classification' else XGBRegressor(seed = self.seed)
-        elif self.model_name == 'LightGBM':
-            params = {
-                'n_estimators': trial.suggest_int('n_estimators', 50, 500),
-                'num_leaves': trial.suggest_int('num_leaves', 2, 31),
-                'max_depth': trial.suggest_int('max_depth', 2, 10),
-                'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3),
-                'min_split_gain': trial.suggest_float('min_split_gain', 0.0, 5.0),
-                'reg_lambda': trial.suggest_float('reg_lambda', 0.0, 10.0),
-                'reg_alpha': trial.suggest_float('reg_alpha', 0.0, 10.0),
-                'min_child_samples': trial.suggest_int('min_child_samples', 1, 10),
-                'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1)
-            }
-            model = lgb.LGBMClassifier(random_state=self.seed, verbose = -1, n_jobs = -1) if self.task_type == 'classification' else lgb.LGBMRegressor(random_state=self.seed, verbose = -1, n_jobs = -1)
-        else:
-            raise ValueError(f"Invalid model_name '{self.model_name}' provided.")
+        ascending = False if self.task_type == 'classification' else True
+        df = df.sort_values(by=self.metric_to_optimize, ascending=ascending)
+        best_model_row = df.iloc[0] 
 
-        return model, params
+        for col in df.columns[2:]:
+            value = best_model_row[col]
+            if isinstance(value, (int, float, str, bool, dict)):
+                dict_best_model[col] = value
+            else:
+                dict_best_model[col] = value.item() if hasattr(value, 'item') else str(value)
 
-    def get_best_model_infos(self, df, path: str):
+        write_json(path + '/best_model_infos.json', dict_best_model)
+
+    def get_best_model_infos(self, df: pd.DataFrame, path: str) -> None:
         """
         Extract and save information about the best model found during optimization.
 
@@ -207,78 +231,41 @@ class BayesianOptimizer:
             ValueError: If df is empty or does not contain necessary columns.
         """
         try:
-            best_score = float('-inf') if self.task_type == 'classification' else float('inf')
-            best_y_val = None
-            best_y_pred = None
-
-            for fold, (train_index, val_index) in enumerate(self.kf.split(self.X, self.y)):
-                X_train, X_val = self.X.iloc[train_index], self.X.iloc[val_index]
-                y_train, y_val = self.y[train_index], self.y[val_index]
-
-                # Set model parameters and fit on training data
+            if(self.model_name != 'MLP'):
                 self.model.set_params(**self.study.best_params)
-                self.model.fit(X_train, y_train)
+                        
+                y_pred = self.train_and_predict(self.best_X_train_fold, self.best_y_train_fold, self.best_X_val_fold)
 
-                # Predict on validation data
-                y_pred = self.model.predict(X_val)
+                metric = Metric(self.best_y_val_fold, y_pred, task_type = self.task_type, seed = self.seed)
 
-                metric = Metric(y_val, y_pred)
-                # Evaluate performance based on task_type
-                if self.task_type == 'classification':
-                    score = metric.evaluate_classification()
-                else:
-                    score = metric.evaluate_regression()
-
-                if self.task_type == 'classification':
-                    if score[self.metric_to_optimize] > best_score:
-                        best_score = score[self.metric_to_optimize]
-                        best_y_val = y_val
-                        best_y_pred = y_pred
-                else:
-                    if score[self.metric_to_optimize] < best_score:
-                        best_score = score[self.metric_to_optimize]
-                        best_y_val = y_val
-                        best_y_pred = y_pred
-
-            metric = Metric(best_y_val, best_y_pred)
-            if self.task_type == 'classification':
-                metric.save_confusion_matrix(path)
-            
-            metric.plot_feature_importance_tree(model = self.model, 
+                metric.plot_feature_importance(model = self.model, 
                                                 model_name = self.model_name,
-                                                top_k_features = 20,
+                                                X_val = self.best_X_val_fold,
+                                                y_val = self.best_y_val_fold,
+                                                top_k_features = 10,
                                                 feature_names = self.X.columns,
-                                                path = path)
+                                                path = path,
+                                                n_repeats = self.n_repeats,
+                                                encoder = self.encoder)
+            
+                if(self.model_name == 'XGBoost'):
+                    y_pred = self.encoder.transform_inverse(y_pred)
+                    self.best_y_val_fold = self.encoder.transform_inverse(self.best_y_val_fold)
+                    metric = Metric(self.best_y_val_fold, y_pred, task_type = self.task_type, seed = self.seed)
 
-            dict_best_model = {
-                'model_name': self.model_name,
-                'task_type': self.task_type,
-            }
-
-            ascending = False if self.task_type == 'classification' else True
-            df = df.sort_values(by=self.metric_to_optimize, ascending=ascending)
-            best_model_row = df.iloc[0] 
-
-            for col in df.columns[2:]:
-                value = best_model_row[col]
-                if isinstance(value, (int, float, str, bool, dict)):
-                    dict_best_model[col] = value
-                else:
-                    dict_best_model[col] = value.item() if hasattr(value, 'item') else str(value)
-
-            write_json(path + '/best_model_infos.json', dict_best_model)
+                if self.task_type == 'classification':
+                    metric.save_confusion_matrix(path)
+                    
+                self.save_best_results_json(df, path)
         except Exception as e:
             raise ValueError(f"Error in extracting best model information: {str(e)}")
         
-    def optimize(self, n_trials: int = 50):
+    def optimize(self, n_trials: int = 50) -> None:
         """
         Perform optimization using Optuna.
 
         Args:
             n_trials (int, optional): Number of trials for optimization. Defaults to 50.
-
-        Returns:
-            pd.DataFrame: DataFrame containing optimization results.
         
         Raises:
             RuntimeError: If during program run time error
@@ -286,17 +273,14 @@ class BayesianOptimizer:
         try:
             self.study.optimize(self.objective, n_trials=n_trials)
 
-            path_to_save = 'results/' + self.task_type + '/' + self.model_name
+            path_to_save = f'results/{self.task_type}/{self.model_name}'
             create_folder(path_to_save)
 
             # Obter todos os resultados do estudo como um DataFrame
             df_results = self.study.trials_dataframe()
-
             df_results = pd.concat([df_results, pd.DataFrame(self.all_metrics)], axis = 1)
             df_results.to_csv(path_to_save + '/optuna_results.csv', index=False)
 
             self.get_best_model_infos(df_results, path = path_to_save)
-
-            return df_results
         except Exception as e:
             raise RuntimeError(f"Optimization failed: {str(e)}")
