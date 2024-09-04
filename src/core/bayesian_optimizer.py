@@ -105,7 +105,7 @@ class BayesianOptimizer:
     def train_and_predict(self, X_train, y_train, X_val):
         """Treina o modelo e faz previsões nos dados de validação."""
         if self.model_name == 'MLP':
-            self.model.fit(X_train, y_train, validation_split=0.2, epochs=5, callbacks=[self.early_stopping])
+            self.model.fit(X_train, y_train, validation_split=0.2, epochs=200, callbacks=[self.early_stopping])
         else:
             self.model.fit(X_train, y_train)
         y_pred = self.model.predict(X_val)
@@ -235,6 +235,8 @@ class BayesianOptimizer:
                 self.model.set_params(**self.study.best_params)
                         
                 y_pred = self.train_and_predict(self.best_X_train_fold, self.best_y_train_fold, self.best_X_val_fold)
+
+                
 
                 metric = Metric(self.best_y_val_fold, y_pred, task_type = self.task_type, seed = self.seed)
 

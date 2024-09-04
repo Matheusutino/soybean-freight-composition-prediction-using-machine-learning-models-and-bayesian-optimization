@@ -1,4 +1,3 @@
-import shap
 import numpy as np
 import seaborn as sns
 from typing import List
@@ -107,24 +106,39 @@ class Metric:
             raise Exception(f"An error occurred during confusion matrix generation: {str(e)}")
 
     def _plot_feature_importance_tree_and_save(self, 
+                                               model_name,
                                                 importances,
                                                 indices, 
                                                 feature_names, 
                                                 top_k_features, 
                                                 title, 
                                                 save_path):
+
         indices = indices[:top_k_features]
 
         plt.figure(figsize=(10, 6))
         plt.title(title)
         plt.barh(range(len(indices)), importances[indices], align="center")
         plt.yticks(range(len(indices)), [feature_names[i] for i in indices])
-        plt.xlabel("Importance")
-        # plt.xlim([0, 1.1 * max(importances[indices])])
+        plt.xlabel("Feature Importance")
+        
+        _, xmax = plt.xlim()
+        if(model_name == 'LightGBM'):
+            xlim = xmax+ 40
+        else:
+            xlim = xmax + 0.1
+        
+        plt.xlim(0, xlim)
+        max_importance = importances[indices].max() * 0.02
+        for i, v in enumerate(importances[indices]):
+            plt.text(v + 0.005 * max_importance, i, f" {v:.3f}", va='center', ha='left')
+
         plt.gca().invert_yaxis()
         plt.tight_layout()
         plt.savefig(save_path, dpi=self.dpi, bbox_inches='tight')
         plt.close()
+
+
 
     def plot_feature_importance_tree(self, 
                                      model, 
@@ -142,25 +156,14 @@ class Metric:
             feature_names (List[str]): Names of features.
             path (str): Path to save the image.
         """
-        if(model_name in ['DecisionTree', 'RandomForest', 'XGBoost']):
+        if(model_name in ['DecisionTree', 'RandomForest', 'XGBoost', 'LightGBM', 'ExtraTrees']):
             path_to_save_image = f'{path}/{model_name}_feature_importance.png'
             feature_importances = model.feature_importances_
 
             indices = sorted(range(len(feature_importances)), key=lambda i: feature_importances[i], reverse=True)[:top_k_features]
 
-            self._plot_feature_importance_tree_and_save(feature_importances, indices, feature_names, top_k_features, 
+            self._plot_feature_importance_tree_and_save(model_name, feature_importances, indices, feature_names, top_k_features, 
                                     f'Top {top_k_features} Feature Importance', path_to_save_image)
-
-        elif(model_name == 'LightGBM'):
-            for importance_type in ['gain', 'split']:
-                # Plotando importância por ganho e salvando como imagem
-                ax1 = lgb.plot_importance(model, 
-                                          importance_type = importance_type, 
-                                          max_num_features = top_k_features, 
-                                          figsize = (7, 6), 
-                                          title = f'LightGBM Feature Importance ({importance_type.capitalize()})')
-                plt.savefig(path + f'/lgb_{importance_type}_feature_importance.png', dpi=self.dpi, bbox_inches='tight')
-                plt.close()  
 
     def _plot_feature_permutation_importance_and_save(self, 
                                                     importances,
@@ -168,15 +171,23 @@ class Metric:
                                                     top_k_features, 
                                                     title, 
                                                     save_path):
-        
+
         sorted_idx = importances.argsort()[::-1][:top_k_features]
+        feature_names = np.array(feature_names)
         top_features = feature_names[sorted_idx]
         top_importances = importances[sorted_idx]
 
         # Criar o gráfico de barras das top 20 features
         plt.figure(figsize=(10, 8))
         plt.barh(top_features, top_importances, align='center')
-        plt.xlabel('Importância Relativa')
+        plt.xlabel('Feature Importance')
+
+        _, xmax = plt.xlim()
+        plt.xlim(0, xmax+0.1)
+        max_importance = top_importances.max()
+        for i, v in enumerate(top_importances):
+            plt.text(v + 0.005 * max_importance, i, f" {v:.3f}", va='center', ha='left')
+        
         plt.title(title)
         plt.gca().invert_yaxis()  # Inverter para mostrar a mais importante no topo
         plt.tight_layout() 

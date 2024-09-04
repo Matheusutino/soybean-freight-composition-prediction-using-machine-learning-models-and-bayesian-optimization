@@ -1,6 +1,7 @@
 import optuna
 from typing import Optional, Dict
 from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import PassiveAggressiveClassifier, PassiveAggressiveRegressor
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
@@ -27,10 +28,18 @@ class Model:
                 'metric': trial.suggest_categorical('metric', ['cityblock', 'cosine', 'euclidean']),
             }
             model = KNeighborsClassifier(**params, n_jobs = -1) if task_type == 'classification' else KNeighborsRegressor(**params, n_jobs = -1)
+        elif model_name == 'PassiveAggressive':
+            params = {
+                'C': trial.suggest_float('C', 0.0001, 10.0, log=True),
+                'tol': trial.suggest_float('tol', 1e-5, 1e-1, log=True),
+                'loss': trial.suggest_categorical('loss', ['hinge', 'squared_hinge'] if task_type == 'classification' else ['epsilon_insensitive', 'squared_epsilon_insensitive']
+    ),
+            }
+            model = PassiveAggressiveClassifier(**params, early_stopping = True, random_state = seed, n_jobs = -1) if task_type == 'classification' else PassiveAggressiveRegressor(**params, early_stopping = True, random_state = seed)
         elif model_name == 'LogisticRegression':
             params = {
                 'C': trial.suggest_float('C', 1e-5, 1e5, log = True),
-                'penalty': trial.suggest_categorical('penalty', ['l1', 'l2', 'elasticnet', None]),
+                'penalty': trial.suggest_categorical('penalty', ['l1', 'l2', None]),
             }
             model = LogisticRegression(**params, max_iter = 300, solver = 'saga', random_state=seed, n_jobs = -1)
         elif model_name == 'SVM':

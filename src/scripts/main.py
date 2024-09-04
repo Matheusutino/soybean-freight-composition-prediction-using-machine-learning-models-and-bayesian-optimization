@@ -34,11 +34,11 @@ if __name__ == '__main__':
                         help='Task type: classification or regression')
     parser.add_argument('--model_name', type=str,
                         help='Model name: name of machine learning model')
-    parser.add_argument('--n_trials', type=int, default=50,
+    parser.add_argument('--n_trials', type=int, default=20,
                         help='Number of attempts for optimization')
-    parser.add_argument('--n_splits', type=int, default=10,
+    parser.add_argument('--n_splits', type=int, default=5,
                         help='Number of splits for cross-validation')
-    parser.add_argument('--n_repeats', type=int, default=10,
+    parser.add_argument('--n_repeats', type=int, default=5,
                         help='Number of repeats for permutation importance')
 
     args = parser.parse_args()
