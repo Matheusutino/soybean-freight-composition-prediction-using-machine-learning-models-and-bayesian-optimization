@@ -1,0 +1,62 @@
+{
+    "model_name": "LightGBM",
+    "task_type": "classification",
+    "datetime_start": "2024-09-22 15:17:35.150178",
+    "datetime_complete": "2024-09-22 15:17:52.874517",
+    "duration": "0 days 00:00:17.724339",
+    "params_colsample_bytree": 0.8005575058716043,
+    "params_learning_rate": 0.18361096041714062,
+    "params_max_depth": 8,
+    "params_min_child_samples": 9,
+    "params_min_split_gain": 0.7800932022121826,
+    "params_n_estimators": 218,
+    "params_num_leaves": 30,
+    "params_reg_alpha": 0.5808361216819946,
+    "params_reg_lambda": 1.5599452033620265,
+    "state": "COMPLETE",
+    "fold_0": {
+        "accuracy": 0.7920103092783505,
+        "balanced_accuracy": 0.7820569614101182,
+        "precision": 0.7899222665198679,
+        "recall": 0.7920103092783505,
+        "f1": 0.7884115069291371
+    },
+    "fold_1": {
+        "accuracy": 0.790721649484536,
+        "balanced_accuracy": 0.7816683314475323,
+        "precision": 0.7880939203839892,
+        "recall": 0.790721649484536,
+        "f1": 0.7874342696529846
+    },
+    "fold_2": {
+        "accuracy": 0.7889175257731958,
+        "balanced_accuracy": 0.7782180675185687,
+        "precision": 0.7860409977711972,
+        "recall": 0.7889175257731958,
+        "f1": 0.7847845207738935
+    },
+    "fold_3": {
+        "accuracy": 0.7778350515463918,
+        "balanced_accuracy": 0.7666871948332078,
+        "precision": 0.7742116573867364,
+        "recall": 0.7778350515463918,
+        "f1": 0.7730549785441894
+    },
+    "fold_4": {
+        "accuracy": 0.8020618556701031,
+        "balanced_accuracy": 0.791174821064695,
+        "precision": 0.7998230843958585,
+        "recall": 0.8020618556701031,
+        "f1": 0.7979155431116011
+    },
+    "accuracy": 0.7903092783505155,
+    "balanced_accuracy": 0.7799610752548245,
+    "precision": 0.7876183852915298,
+    "recall": 0.7903092783505155,
+    "f1": 0.7863201638023611,
+    "accuracy_std": 0.008641902849195093,
+    "balanced_accuracy_std": 0.008835857838771331,
+    "precision_std": 0.00917492761644633,
+    "recall_std": 0.008641902849195093,
+    "f1_std": 0.00892175863675367
+}

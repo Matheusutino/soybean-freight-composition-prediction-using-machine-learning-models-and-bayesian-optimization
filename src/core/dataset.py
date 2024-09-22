@@ -1,8 +1,19 @@
 import pandas as pd
+import numpy as np
+from typing import Literal, Tuple
 
 class Dataset:
     @staticmethod
-    def load_dataset(dataset_path: str) -> pd.DataFrame:
+    def generate_classification_target(value: int) -> str:
+        if(value < 60):
+            return 'frete_baixo'
+        elif(value < 100):
+            return 'frete_medio'
+        else:
+            return 'frete_alto'
+        
+    @staticmethod
+    def load_dataset(dataset_path: str, task_type: Literal['classification', 'regression']) -> Tuple[pd.DataFrame, np.ndarray]:
         """
         Load a dataset from a CSV file into a Pandas DataFrame.
 
@@ -32,9 +43,20 @@ class Dataset:
                 'MERCADO_NACIONAL', 'MERCADO_INTERNACIONAL_CHICAGO', 'MERCADO_INTERNACIONAL_PARIDADE', 
                 'CAPACIDADE_INDUSTRIA_ESTADO_ORIGEM', 'CAPACIDADE_INDUSTRIA_ESTADO_DESTINO', 
                 'CAMBIO_MEDIO_MENSAL', 'IMPORTACAO_OLEO_DIESEL', 'VOLUME_EXPORTACAO_UF_ORIGEM_MES', 
-                'VOLUME_EXPORTACAO_UF_ORIGEM_ANO', 'PRECOAJUSTADO', 'PERIODO_SAFRA'
+                'VOLUME_EXPORTACAO_UF_ORIGEM_ANO', 'PERIODO_SAFRA'
             ]
-            df = df[columns]
+
+            X = df[columns]
+
+            if(task_type == 'classification'):
+                df['preco_frete (y)'] = df['PRECOAJUSTADO'].apply(Dataset.generate_classification_target)
+                y = df['preco_frete (y)'].to_numpy()
+            elif(task_type == 'regression'):
+                y = df['PRECOAJUSTADO'].to_numpy()
+            else:
+                raise ValueError("task_type is 'classification' or 'regression'")
+            
+            return X, y
         except FileNotFoundError as e:
             raise FileNotFoundError(f"File not found: {dataset_path}")
         except pd.errors.EmptyDataError as e:

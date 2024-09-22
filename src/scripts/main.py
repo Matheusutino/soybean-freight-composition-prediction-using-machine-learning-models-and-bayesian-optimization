@@ -14,19 +14,12 @@ def main(task_type: str, model_name: str, n_trials: int, n_splits: int, n_repeat
         n_trials (int): Number of attempts for optimization.
         n_splits (int): Number of splits for cross-validation.
         n_repeats (int): Number of repeats for permutation importance.
-
-    Raises:
-        Exception: If any other error occurs during the optimization process.
     """
-    try:
-        df = Dataset().load_dataset(dataset_path='dataset/Banco_de_dados_ajustado_BASE.csv')
-        X, y = Preprocessing.clean_data(df, task_type=task_type)
 
-        optimizer = BayesianOptimizer(X, y, task_type=task_type, model_name=model_name, n_splits=n_splits, n_repeats=n_repeats)
-        optimizer.optimize(n_trials=n_trials)
+    X, y = Dataset().load_dataset(dataset_path='dataset/Banco_de_dados_ajustado_BASE.csv', task_type = task_type)
 
-    except Exception as e:
-        raise Exception(f"An error occurred during optimization: {str(e)}")
+    optimizer = BayesianOptimizer(X, y, task_type=task_type, model_name=model_name, n_splits=n_splits, n_repeats=n_repeats)
+    optimizer.optimize(n_trials=n_trials)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script for Bayesian optimization with parameters.')

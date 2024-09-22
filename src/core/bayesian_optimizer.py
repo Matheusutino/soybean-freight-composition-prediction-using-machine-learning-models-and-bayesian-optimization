@@ -12,6 +12,7 @@ from src.core.encoder import Encoder
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 from src.core.models import Model
+from src.core.preprocessing import Preprocessing
 
 
 
@@ -161,6 +162,8 @@ class BayesianOptimizer:
             X_train, X_val = self.X.iloc[train_index], self.X.iloc[val_index]
             y_train, y_val = self.y[train_index], self.y[val_index]
 
+            X_train, X_val = Preprocessing.clean_data(X_train, X_val)
+
             y_train = self.encoder.transform(y_train)
             y_pred = self.train_and_predict(X_train, y_train, X_val)
 
@@ -245,7 +248,7 @@ class BayesianOptimizer:
                                                 X_val = self.best_X_val_fold,
                                                 y_val = self.best_y_val_fold,
                                                 top_k_features = 10,
-                                                feature_names = self.X.columns,
+                                                feature_names = self.best_X_train_fold.columns,
                                                 n_repeats = self.n_repeats,
                                                 path = path,
                                                 encoder = self.encoder)
@@ -268,21 +271,15 @@ class BayesianOptimizer:
 
         Args:
             n_trials (int, optional): Number of trials for optimization. Defaults to 50.
-        
-        Raises:
-            RuntimeError: If during program run time error
         """
-        try:
-            self.study.optimize(self.objective, n_trials=n_trials)
+        self.study.optimize(self.objective, n_trials=n_trials)
 
-            path_to_save = f'results/{self.task_type}/{self.model_name}'
-            create_folder(path_to_save)
+        path_to_save = f'results/{self.task_type}/{self.model_name}'
+        create_folder(path_to_save)
 
-            # Obter todos os resultados do estudo como um DataFrame
-            df_results = self.study.trials_dataframe()
-            df_results = pd.concat([df_results, pd.DataFrame(self.all_metrics)], axis = 1)
-            df_results.to_csv(path_to_save + '/optuna_results.csv', index=False)
+        # Obter todos os resultados do estudo como um DataFrame
+        df_results = self.study.trials_dataframe()
+        df_results = pd.concat([df_results, pd.DataFrame(self.all_metrics)], axis = 1)
+        df_results.to_csv(path_to_save + '/optuna_results.csv', index=False)
 
-            self.get_best_model_infos(df_results, path = path_to_save)
-        except Exception as e:
-            raise RuntimeError(f"Optimization failed: {str(e)}")
+        self.get_best_model_infos(df_results, path = path_to_save)
